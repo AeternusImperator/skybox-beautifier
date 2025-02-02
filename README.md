@@ -1,5 +1,5 @@
 # skybox-beautifier
-Split a single skybox images into 6 images.
+Split a single skybox image into 6 images.
 
 <p align="center">
   <img src="https://user-images.githubusercontent.com/66020831/208423648-5562a49d-362d-4be4-a8b5-b11a86f7ce4d.png" width="738px" />
