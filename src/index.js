@@ -8,14 +8,7 @@ import { createSpinner } from "nanospinner";
 import sharp from "sharp";
 import path from "path";
 
-const indexToFaceName = {
-    0: "Left",
-    1: "Front",
-    2: "Right",
-    3: "Back",
-    4: "Top",
-    5: "Bottom",
-};
+const indexToFaceName = ["Left", "Front", "Right", "Back", "Top", "Bottom"];
 
 const layouts = {
     "Top/Up face above front face and bottom/down face below front face": [
@@ -70,76 +63,21 @@ async function welcome() {
 }
 
 /**
- * Asks the user to enter the texture path.
- * @returns path
+ * Generic function to ask a question via Inquirer.
+ * @param {string} name - The key name for storing the answer.
+ * @param {string} message - The prompt message.
+ * @param {string} type - The type of input (e.g., "input", "number", "confirm").
+ * @param {Array} [choices] - Optional choices for list-type questions.
+ * @returns {Promise<any>} - User's response.
  */
-async function askPath() {
-    const prompt = await inquirer.prompt({
-        name: "path",
-        type: "input",
-        message: "Select the texture path:",
-    });
+async function askQuestion(name, message, type = "input", choices = null) {
+    const promptOptions = { name, type, message };
+    if (choices) {
+        promptOptions.choices = choices;
+    }
 
-    return prompt.path;
-}
-
-/**
- * Asks the user to enter the face size.
- * @returns faceSize
- */
-async function askFaceSize() {
-    const prompt = await inquirer.prompt({
-        name: "faceSize",
-        type: "number",
-        message: "Select face size:",
-    });
-
-    return prompt.faceSize;
-}
-
-/**
- * Asks the user to enter the save path.
- * @returns savePath
- */
-async function askSavePath() {
-    const prompt = await inquirer.prompt({
-        name: "saveDirectory",
-        type: "input",
-        message: "Select the save directory:",
-    });
-
-    return prompt.saveDirectory;
-}
-
-/**
- * Asks the user to enter the layout.
- * @returns layout
- */
-async function askLayout() {
-    const prompt = await inquirer.prompt({
-        name: "layout",
-        type: "list",
-        message: "Select the texture layout:",
-        choices: Object.keys(layouts),
-    });
-
-    return prompt.layout;
-}
-
-/**
- * Asks the user to confirm parameters.
- * @returns confirmation
- */
-async function askConfirmation(data) {
-    printParameters(data);
-
-    const prompt = await inquirer.prompt({
-        name: "confirmation",
-        type: "confirm",
-        message: "Confirm all parameters are correct?",
-    });
-
-    return prompt.confirmation;
+    const response = await inquirer.prompt(promptOptions);
+    return response[name];
 }
 
 /**
@@ -147,18 +85,13 @@ async function askConfirmation(data) {
  * @param {object} parameters
  */
 function printParameters(parameters) {
-    if (typeof parameters !== "object" || parameters === null) {
-        console.error("Invalid input parameter. Expected an object.");
-        return;
-    }
+    console.log(chalk.bgCyanBright("\nProcessing with the following parameters:\n"));
 
-    console.log(
-        chalk.bgCyanBright("Processing image with following parameters:")
-    );
-
-    Object.keys(parameters).forEach((key) => {
-        console.log(chalk.bgCyanBright(`• ${key}: ${parameters[key]}`));
+    Object.entries(parameters).forEach(([key, value]) => {
+        console.log(chalk.cyanBright(`• ${chalk.bold(key)}: ${value}`));
     });
+
+    console.log("");
 }
 
 /**
@@ -168,11 +101,9 @@ function printParameters(parameters) {
  * @returns
  */
 function layoutToOptions(faceSize, layout) {
-    const options = layouts[layout];
-    const base = { width: faceSize, height: faceSize };
-
-    return options.map(({ left, top }) => ({
-        ...base,
+    return layouts[layout].map(({ left, top }) => ({
+        width: faceSize,
+        height: faceSize,
         left: left * faceSize,
         top: top * faceSize,
     }));
@@ -188,30 +119,21 @@ async function processTexture(data) {
     const options = layoutToOptions(data.faceSize, data.layout);
 
     try {
-        await sleep();
-
         const start = Date.now();
 
         await Promise.all(
             options.map(async (option, i) => {
-                const fileName = path.join(
-                    data.savePath,
-                    `${indexToFaceName[i]}.png`
-                );
-
+                const fileName = path.join(data.savePath, `${indexToFaceName[i]}.png`);
                 await sharp(data.path).extract(option).toFile(fileName);
             })
         );
 
         const end = Date.now();
-        spinner.success({
-            text: `Success! Saved image faces at ${data.savePath}`,
-        });
+        spinner.success({ text: `Success! Saved image faces at ${data.savePath}` });
         console.log(chalk.blueBright(`Process took ${end - start} ms`));
     } catch (err) {
         spinner.error({ text: "Failed to process skybox!" });
         console.log(err);
-        throw err;
     }
 }
 
@@ -220,17 +142,16 @@ console.clear();
 await welcome();
 
 const data = {
-    path: await askPath(),
-    faceSize: await askFaceSize(),
-    savePath: await askSavePath(),
-    layout: await askLayout(),
+    path: await askQuestion("path", "Enter the texture path:"),
+    faceSize: await askQuestion("faceSize", "Enter the face size:", "number"),
+    savePath: await askQuestion("savePath", "Enter the save directory:"),
+    layout: await askQuestion("layout", "Select the texture layout:", "list", Object.keys(layouts)),
 };
 
-askConfirmation(data).then((confirmation) => {
-    if (confirmation) {
-        processTexture(data);
-    } else {
-        console.log(chalk.bgCyan("Aborting process..."));
-        process.exit(1);
-    }
-});
+if (await askQuestion("confirmation", "Are all parameters correct?", "confirm")) {
+    printParameters(data);
+    await processTexture(data);
+} else {
+    console.log(chalk.bgRed("Process aborted!"));
+    process.exit(1);
+}
